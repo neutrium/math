@@ -1,0 +1,204 @@
+{
+	"name": "@neutrium/math",
+	"version": "2.0.0",
+	"description": "Expressions, curves, numeric contracts, exact-value helpers and arithmetic backends for Neutrium applications",
+	"type": "module",
+	"sideEffects": false,
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"default": "./dist/index.js"
+		},
+		"./expressions": {
+			"types": "./dist/expressions/index.d.ts",
+			"default": "./dist/expressions/index.js"
+		},
+		"./expressions/number": {
+			"types": "./dist/expressions/number.d.ts",
+			"default": "./dist/expressions/number.js"
+		},
+		"./expressions/decimal": {
+			"types": "./dist/expressions/decimal.d.ts",
+			"default": "./dist/expressions/decimal.js"
+		},
+		"./expressions/core": {
+			"types": "./dist/expressions/core.d.ts",
+			"default": "./dist/expressions/core.js"
+		},
+		"./expressions/syntax": {
+			"types": "./dist/expressions/syntax.d.ts",
+			"default": "./dist/expressions/syntax.js"
+		},
+		"./curves": {
+			"types": "./dist/curves/index.d.ts",
+			"default": "./dist/curves/index.js"
+		},
+		"./curves/number": {
+			"types": "./dist/curves/number.d.ts",
+			"default": "./dist/curves/number.js"
+		},
+		"./curves/adapter": {
+			"types": "./dist/curves/adapter.d.ts",
+			"default": "./dist/curves/adapter.js"
+		},
+		"./curves/decimal": {
+			"types": "./dist/curves/decimal.d.ts",
+			"default": "./dist/curves/decimal.js"
+		},
+		"./curves/definitions": {
+			"types": "./dist/curves/definitions.d.ts",
+			"default": "./dist/curves/definitions.js"
+		},
+		"./number": {
+			"types": "./dist/index.d.ts",
+			"default": "./dist/index.js"
+		},
+		"./decimal": {
+			"types": "./dist/decimal.d.ts",
+			"default": "./dist/decimal.js"
+		},
+		"./definitions": {
+			"types": "./dist/definitions.d.ts",
+			"default": "./dist/definitions.js"
+		},
+		"./package.json": "./package.json",
+		"./numeric": {
+			"types": "./dist/numeric/index.d.ts",
+			"default": "./dist/numeric/index.js"
+		},
+		"./numeric/core": {
+			"types": "./dist/adapters/contracts/NumericAdapter.d.ts",
+			"default": "./dist/adapters/contracts/NumericAdapter.js"
+		},
+		"./numeric/integer": {
+			"types": "./dist/numeric/integer.d.ts",
+			"default": "./dist/numeric/integer.js"
+		},
+		"./numeric/conversion": {
+			"types": "./dist/numeric/conversion.d.ts",
+			"default": "./dist/numeric/conversion.js"
+		},
+		"./numeric/helpers": {
+			"types": "./dist/numeric/helpers.d.ts",
+			"default": "./dist/numeric/helpers.js"
+		},
+		"./numeric/factors": {
+			"types": "./dist/numeric/factors.d.ts",
+			"default": "./dist/numeric/factors.js"
+		},
+		"./numeric/rational": {
+			"types": "./dist/numeric/rational.d.ts",
+			"default": "./dist/numeric/rational.js"
+		},
+		"./numeric/arithmetic": {
+			"types": "./dist/adapters/contracts/ArithmeticAdapter.d.ts",
+			"default": "./dist/adapters/contracts/ArithmeticAdapter.js"
+		},
+		"./numeric/scientific": {
+			"types": "./dist/adapters/contracts/ScientificAdapter.d.ts",
+			"default": "./dist/adapters/contracts/ScientificAdapter.js"
+		},
+		"./adapters/contracts": {
+			"types": "./dist/adapters/contracts/index.d.ts",
+			"default": "./dist/adapters/contracts/index.js"
+		},
+		"./adapters/configuration": {
+			"types": "./dist/adapters/configuration.d.ts",
+			"default": "./dist/adapters/configuration.js"
+		},
+		"./adapters/testing": {
+			"types": "./dist/adapters/testing.d.ts",
+			"default": "./dist/adapters/testing.js"
+		},
+		"./adapters/decimal": {
+			"types": "./dist/adapters/decimal/index.d.ts",
+			"default": "./dist/adapters/decimal/index.js"
+		},
+		"./adapters/decimal/core": {
+			"types": "./dist/adapters/decimal/DecimalCoreAdapter.d.ts",
+			"default": "./dist/adapters/decimal/DecimalCoreAdapter.js"
+		},
+		"./adapters/decimal/arithmetic": {
+			"types": "./dist/adapters/decimal/DecimalArithmeticAdapter.d.ts",
+			"default": "./dist/adapters/decimal/DecimalArithmeticAdapter.js"
+		},
+		"./adapters/decimal/scientific": {
+			"types": "./dist/adapters/decimal/DecimalScientificAdapter.d.ts",
+			"default": "./dist/adapters/decimal/DecimalScientificAdapter.js"
+		},
+		"./adapters/bigint": {
+			"types": "./dist/adapters/BigIntAdapter.d.ts",
+			"default": "./dist/adapters/BigIntAdapter.js"
+		},
+		"./adapters/number": {
+			"types": "./dist/adapters/NumberAdapter.d.ts",
+			"default": "./dist/adapters/NumberAdapter.js"
+		},
+		"./numeric/fractions": {
+			"types": "./dist/numeric/fractions.d.ts",
+			"default": "./dist/numeric/fractions.js"
+		},
+		"./numeric/roots": {
+			"types": "./dist/numeric/roots.d.ts",
+			"default": "./dist/numeric/roots.js"
+		},
+		"./numeric/powers": {
+			"types": "./dist/numeric/powers.d.ts",
+			"default": "./dist/numeric/powers.js"
+		}
+	},
+	"engines": {
+		"node": ">=24.0.0"
+	},
+	"scripts": {
+		"docs": "typedoc",
+		"clean": "node scripts/clean.mjs",
+		"build": "npm run clean && tsc -p tsconfig.json",
+		"test:release": "node --test scripts/tests/*.test.mjs",
+		"test": "npm run build && npm run test:release && tsc -p tsconfig.consumer.json && vitest run && node scripts/test-package.mjs",
+		"prepack": "npm run build",
+		"prepublishOnly": "npm run release:check && npm test",
+		"benchmark": "npm run build && vitest bench --run --config vitest.benchmark.config.js",
+		"benchmark:built": "vitest bench --run --config vitest.benchmark.config.js",
+		"test:browser": "npm run build && node scripts/test-package.mjs --browser",
+		"release:check": "node scripts/release-metadata.mjs"
+	},
+	"files": [
+		"dist",
+		"src/**/*.ts",
+		"README.md",
+		"LICENSE",
+		"guides/**/*.md",
+		"examples/**/*.ts",
+		"!src/**/tests/**"
+	],
+	"dependencies": {
+		"@neutrium/decimal": "^2.3.0",
+		"@neutrium/utilities": "5.0.0"
+	},
+	"devDependencies": {
+		"es-module-lexer": "^2.3.2",
+		"playwright": "1.64.1",
+		"typedoc": "0.28.20",
+		"typescript": "6.0.3",
+		"vite": "^8.3.5",
+		"vitest": "^5.0.5"
+	},
+	"license": "MIT",
+	"author": "Trevor Walker <trevorw@neutrium.net>",
+	"publishConfig": {
+		"access": "public",
+		"registry": "https://registry.npmjs.org/",
+		"tag": "latest"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/neutrium/math.git"
+	},
+	"bugs": {
+		"url": "https://github.com/neutrium/math/issues"
+	},
+	"homepage": "https://neutrium.github.io/math/"
+}

@@ -1,0 +1,22 @@
+/** Backend-independent numeric contracts and reusable operations. */
+export type { NumericAdapter, NumericInput } from '../adapters/contracts/NumericAdapter.js';
+export type { ArithmeticAdapter } from '../adapters/contracts/ArithmeticAdapter.js';
+export type { ScientificAdapter } from '../adapters/contracts/ScientificAdapter.js';
+export { isConfigurableAdapter } from '../adapters/configuration.js';
+export type { NumericOptions, ConfigurableAdapter } from '../adapters/contracts/ConfigurableAdapter.js';
+export { IntegerConversionError, toSafeInteger } from './integer.js';
+export type { IntegerConversionReason } from './integer.js';
+export { convertNumericScalar } from './conversion.js';
+export { addFactor, reduceFactors, factorRatio, factoredValue } from './factors.js';
+export type { Factors } from './factors.js';
+export { parseRationalTerm, validateRationalTerm, scaleTerm, multiplyValue, negateValue, evaluateRational, rationalToScalar, hasRationalArithmetic } from './rational.js';
+export type { RationalTerm, RationalValue, RationalEvaluationOptions, RationalConversionOptions, RationalArithmeticAdapter } from './rational.js';
+export { hasRationalExtraction, hasRationalConstruction, hasRationalComparison } from '../adapters/contracts/RationalCapabilities.js';
+export type { RationalExtraction, RationalConstruction, RationalComparison } from '../adapters/contracts/RationalCapabilities.js';
+export type { RationalExpansionOptions, RationalPrecisionOptions, RationalComputationOptions } from './rational-options.js';
+export { RationalTypeError, RationalRangeError } from './rational-errors.js';
+export type { RationalTypeErrorCode, RationalRangeErrorCode } from './rational-errors.js';
+export { fraction, normalizeFraction, fractionFromTerm, parseFraction, addFractions, subtractFractions, multiplyFractions, divideFractions, negateFraction } from './fractions.js';
+export type { RationalFraction } from './fractions.js';
+export { rootedValue } from './roots.js';
+export { powRational } from './powers.js';

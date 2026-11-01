@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.ref_type == 'branch' }}
+
+jobs:
+  node:
+    name: Node ${{ matrix.node }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['24.0.0', '24.x', '26.x']
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm run release:check
+      - run: npm test
+        env:
+          MATH_PACKAGE_ARTIFACT: ${{ runner.temp }}/math-package.tgz
+      - name: Build documentation from verified source
+        if: matrix.node == '24.x'
+        run: npm run docs
+      - name: Retain tested package archive
+        if: matrix.node == '24.x'
+        uses: actions/upload-artifact@v4
+        with:
+          name: verified-package
+          path: ${{ runner.temp }}/math-package.tgz
+          if-no-files-found: error
+          retention-days: 7
+      - name: Retain verified documentation
+        if: matrix.node == '24.x'
+        uses: actions/upload-artifact@v4
+        with:
+          name: verified-site
+          path: docs
+          if-no-files-found: error
+          retention-days: 7
+
+  browser:
+    name: Chromium package smoke tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24.x'
+          cache: npm
+      - run: npm ci
+      - run: npx --no-install playwright install --with-deps chromium
+      - run: npm run test:browser

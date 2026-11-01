@@ -1,0 +1,124 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: npm-release
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate version tag on main
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+      dist_tag: ${{ steps.release.outputs.dist_tag }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24.x'
+          package-manager-cache: false
+      - name: Validate tag against committed release metadata
+        id: release
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: npm run release:check
+      - name: Require the tagged commit to be on main
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+          node scripts/release-source.mjs
+
+  verify:
+    needs: validate
+    uses: ./.github/workflows/ci.yml
+
+  publish:
+    name: Publish tested archive to npm
+    needs: [validate, verify]
+    runs-on: ubuntu-latest
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24.x'
+          package-manager-cache: false
+          registry-url: https://registry.npmjs.org
+      - name: Install npm with trusted publishing support
+        run: npm install --global npm@11.17.0
+      - name: Check npm trusted publishing support
+        run: |
+          node --input-type=module -e "import { execFileSync } from 'node:child_process'; const [a,b,c] = execFileSync('npm', ['--version'], {encoding:'utf8'}).trim().split('.').map(Number); if (a < 11 || a === 11 && (b < 5 || b === 5 && c < 1)) throw new Error('npm >=11.5.1 is required');"
+      - name: Download tested package archive
+        uses: actions/download-artifact@v4
+        with:
+          name: verified-package
+          path: ${{ runner.temp }}/verified-package
+      - name: Publish tested archive using npm trusted publishing
+        env:
+          DIST_TAG: ${{ needs.validate.outputs.dist_tag }}
+          PACKAGE_ARCHIVE: ${{ runner.temp }}/verified-package/math-package.tgz
+        run: npm publish "$PACKAGE_ARCHIVE" --ignore-scripts --access public --provenance --tag "$DIST_TAG"
+
+  deploy-docs:
+    name: Deploy documentation to GitHub Pages
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Download verified documentation
+        uses: actions/download-artifact@v4
+        with:
+          name: verified-site
+          path: docs
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: docs
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+  github-release:
+    name: Create GitHub release
+    needs: [validate, publish]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Create release with generated notes
+        env:
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          VERSION: ${{ needs.validate.outputs.version }}
+          DIST_TAG: ${{ needs.validate.outputs.dist_tag }}
+        shell: bash
+        run: |
+          flags=(--generate-notes --verify-tag --title "@neutrium/math $VERSION")
+          if [[ "$DIST_TAG" == "next" ]]; then
+            flags+=(--prerelease)
+          fi
+          gh release create "$RELEASE_TAG" "${flags[@]}"

@@ -1,0 +1,20 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "name": "@neutrium/math",
+  "tsconfig": "./tsconfig.json",
+  "out": "./docs",
+  "readme": "./README.md",
+  "projectDocuments": ["./guides/**/*.md"],
+  "includeVersion": true,
+  "highlightLanguages": ["typescript", "javascript", "json", "bash", "diff"],
+  "sourceLinkTemplate": "https://github.com/neutrium/math/blob/{gitRevision}/{path}#L{line}",
+  "excludeInternal": true,
+  "excludePrivate": true,
+  "excludeProtected": true,
+  "cleanOutputDir": true,
+  "treatWarningsAsErrors": true,
+  "navigationLinks": {
+    "GitHub": "https://github.com/neutrium/math",
+    "Neutrium": "https://neutrium.net"
+  }
+}
