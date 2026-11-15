@@ -107,10 +107,18 @@ test('missing either rational capability uses numeric text without a Number inte
 		assert.equal(receiver.toString(convertNumericScalar(receiver, source, source.from(text))), text);
 		assert.equal(receiver.toString(convertNumericScalar(receiver, source, source.from('-0'))), '-0');
 	}
+});
 
+test('BigInt truncates extracted fractions and rejects fractional text during fallback', () => {
+	const receiver = new BigIntAdapter();
 	const source = new BoxSource();
-	assert.equal(convertNumericScalar(new BigIntAdapter(), source, source.from('9007199254740993')), 9007199254740993n);
-	assert.throws(() => convertNumericScalar(new BigIntAdapter(), source, source.from('1.5')), RangeError);
+	const value = source.from('1.5');
+	source.toNumber = unused;
+	assert.equal(convertNumericScalar(receiver, source, source.from('9007199254740993')), 9007199254740993n);
+	assert.equal(convertNumericScalar(receiver, source, value), 1n);
+
+	source.toRationalTerm = undefined;
+	assert.throws(() => convertNumericScalar(receiver, source, value), RangeError);
 });
 
 test('backend labels do not imply representation compatibility', () => {

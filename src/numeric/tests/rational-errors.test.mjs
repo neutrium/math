@@ -7,7 +7,6 @@ import { addFactor, factorRatio, factoredValue } from '@neutrium/math/numeric/fa
 import { rootedValue } from '@neutrium/math/numeric/roots';
 import { powRational } from '@neutrium/math/numeric/powers';
 import { NumberAdapter } from '@neutrium/math/adapters/number';
-import { BigIntAdapter } from '@neutrium/math/adapters/bigint';
 import { DecimalArithmeticAdapter } from '@neutrium/math/adapters/decimal/arithmetic';
 import * as numeric from '@neutrium/math/numeric';
 
@@ -107,12 +106,10 @@ test('bounds shape and callback validation failures are structured', () => {
 	fails(() => evaluateRational([{ bounds: () => [term(), term(1n, 0n)] }], () => 0), RationalRangeError, 'ZERO_DENOMINATOR');
 });
 
-test('factor, root and power domain failures are distinguishable from missing adapter capabilities', () => {
+test('factor, root and power domain failures have distinct range error codes', () => {
 	fails(() => addFactor(new Map(), 0n, 1n), RationalRangeError, 'INVALID_FACTOR');
 	fails(() => rootedValue(new Map(), 0n), RationalRangeError, 'INVALID_DEGREE');
 	fails(() => powRational(new NumberAdapter(), -4, fraction(1n, 2n)), RationalRangeError, 'NON_REAL_RESULT');
-	fails(() => powRational(new BigIntAdapter(), 4n, fraction(1n, 2n)), RationalTypeError, 'UNSUPPORTED_ADAPTER');
-	fails(() => powRational(new BigIntAdapter(), 4n, fraction(10n ** 30n)), RationalRangeError, 'UNSUPPORTED_EXPONENT');
 });
 
 test('provider, callback, backend and accessor failures propagate unchanged, even with matching messages or codes', () => {

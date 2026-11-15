@@ -114,11 +114,11 @@ test('conversion never formats backend scalars and only converts zero to Number 
 	}
 });
 
-test('integer conversion retains exact large integers and rejects fractions', () => {
+test('integer conversion retains large integers and truncates completed fractions', () => {
 	const n = new BigIntAdapter(), integer = 10n ** 100n + 1n;
 	assert.equal(rationalToScalar(n, exact(integer * 3n, 3n)), integer);
 	assert.equal(rationalToScalar(n, exact(-6n, 3n, 2n)), -200n);
-	assert.throws(() => rationalToScalar(n, exact(1n, 3n)), /fractional values/);
+	assert.equal(rationalToScalar(n, exact(1n, 3n)), 0n);
 });
 
 test('conversion validates controls and rational inputs without retrying backend or provider errors', () => {

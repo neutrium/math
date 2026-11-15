@@ -35,7 +35,7 @@ test('checks are frozen, independently runnable and absent from production barre
 	assert.ok(checks.every(Object.isFrozen));
 	assert.equal(new Set(checks.map(check => check.name)).size, checks.length);
 	assert.ok(!checks.some(check => check.name.startsWith('scientific/')));
-	assert.deepEqual(checks.filter(check => check.name.startsWith('rational/')).map(check => check.name), ['rational/extraction']);
+	assert.deepEqual(checks.filter(check => check.name.startsWith('rational/')).map(check => check.name), ['rational/extraction', 'rational/construction', 'rational/comparison']);
 	assert.equal('createAdapterConformanceChecks' in numeric, false);
 	assert.equal('createAdapterConformanceChecks' in contracts, false);
 });

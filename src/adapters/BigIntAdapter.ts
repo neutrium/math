@@ -1,5 +1,5 @@
-import type { ArithmeticAdapter } from './contracts/ArithmeticAdapter.js';
-import type { RationalExtraction } from './contracts/RationalCapabilities.js';
+import type { RationalArithmeticAdapter } from './contracts/RationalArithmeticAdapter.js';
+import { compareBigIntSum, truncateBigIntSum } from './bigint-sum.js';
 import type { RationalTerm } from '../numeric/rational.js';
 import { literal } from '../numeric/literal.js';
 import { assertInteger } from '@neutrium/utilities/validation';
@@ -9,7 +9,7 @@ import { assertInteger } from '@neutrium/utilities/validation';
  * Typed operands are used directly without runtime type checks. Use from to convert
  * external inputs or isValue to validate them before calling typed methods.
  */
-export class BigIntAdapter implements ArithmeticAdapter<bigint>, RationalExtraction<bigint>
+export class BigIntAdapter implements RationalArithmeticAdapter<bigint>
 {
 	/** Diagnostic backend name. */
 	readonly id = 'bigint';
@@ -78,6 +78,18 @@ export class BigIntAdapter implements ArithmeticAdapter<bigint>, RationalExtract
 	toRationalTerm(value: bigint): RationalTerm
 	{
 		return { numerator: value, denominator: 1n, exponent: 0n };
+	}
+
+	/** Truncate the complete rational sum toward zero once, like BigInt division. */
+	fromRationalSum(terms: Iterable<RationalTerm>): bigint
+	{
+		return truncateBigIntSum(terms);
+	}
+
+	/** Compare the exact sum with zero before integer truncation. */
+	compareRationalSum(terms: Iterable<RationalTerm>): -1 | 0 | 1
+	{
+		return compareBigIntSum(terms);
 	}
 
 	/** Compare exact integers. */

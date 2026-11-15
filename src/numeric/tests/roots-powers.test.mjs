@@ -3,7 +3,8 @@ import { test } from 'vitest';
 import { rootedValue } from '@neutrium/math/numeric/roots';
 import { powRational } from '@neutrium/math/numeric/powers';
 import { fraction, parseFraction } from '@neutrium/math/numeric/fractions';
-import { multiplyValue, evaluateRational } from '@neutrium/math/numeric/rational';
+import { multiplyValue, evaluateRational, RationalRangeError, RationalTypeError } from '@neutrium/math/numeric/rational';
+import { BigIntAdapter } from '@neutrium/math/adapters/bigint';
 import { NumberAdapter } from '@neutrium/math/adapters/number';
 import { DecimalScientificAdapter } from '@neutrium/math/adapters/decimal/scientific';
 import { DecimalArithmeticAdapter } from '@neutrium/math/adapters/decimal/arithmetic';
@@ -87,12 +88,12 @@ for (const n of [new NumberAdapter(), new DecimalScientificAdapter(), new Decima
 	});
 }
 
-test('arithmetic adapters support integer powers without new interface requirements', () => {
-	const n = new DecimalArithmeticAdapter();
-	n.fromRationalSum = undefined;
-	assert.equal(n.toString(powRational(n, n.from(3), fraction(2n))), '9');
-	assert.throws(() => powRational(n, n.from(4), fraction(1n, 2n)), /scientific/);
-	assert.throws(() => powRational(n, n.from(4), fraction(10n ** 30n)), /safe integer/);
+test('BigInt rational powers preserve exact roots and truncate fractional results toward zero', () => {
+	const integer = new BigIntAdapter();
+	const half = fraction(1n, 2n);
+	assert.equal(powRational(integer, 9n, half), 3n);
+	assert.equal(powRational(integer, 8n, half), 2n);
+	assert.equal(powRational(integer, -9n, fraction(1n, 3n)), -2n);
 });
 
 test('rational powers round once in every Decimal rounding mode', () => {
@@ -132,12 +133,16 @@ test('partial rational arithmetic handles roots and large powers without scienti
 	assert.throws(() => powRational(n, n.from(4), fraction(1n, 2n)), error => error === failure);
 });
 
-test('arithmetic adapters missing either required rational capability retain structured rejection', () => {
+test('arithmetic adapters missing extraction or construction support safe integer powers only', () => {
 	for (const method of ['toRationalTerm', 'fromRationalSum'])
 	{
-		const n = new DecimalArithmeticAdapter(); n[method] = undefined;
-		assert.throws(() => powRational(n, n.from(4), fraction(1n, 2n)), error => error.code === 'UNSUPPORTED_ADAPTER');
-		assert.throws(() => powRational(n, n.from(4), fraction(10n ** 30n)), error => error.code === 'UNSUPPORTED_EXPONENT');
+		const n = new DecimalArithmeticAdapter();
+		n[method] = undefined;
+		assert.equal(n.toString(powRational(n, n.from(3), fraction(2n))), '9');
+		assert.throws(() => powRational(n, n.from(4), fraction(1n, 2n)),
+			error => error instanceof RationalTypeError && error.code === 'UNSUPPORTED_ADAPTER');
+		assert.throws(() => powRational(n, n.from(4), fraction(10n ** 30n)),
+			error => error instanceof RationalRangeError && error.code === 'UNSUPPORTED_EXPONENT');
 	}
 });
 

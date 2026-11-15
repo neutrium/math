@@ -65,7 +65,7 @@ See [rational values](rational-values.md), [fractions and powers](fractions-and-
 | `/adapters/contracts` | `NumericInput`, `NumericAdapter`, `ArithmeticAdapter`, `ScientificAdapter`, configuration types, independent rational capabilities and their guards, `RationalArithmeticAdapter` and `hasRationalArithmetic` |
 | `/adapters/configuration` | `isConfigurableAdapter`, `ConfigurableAdapter`, `NumericOptions` |
 | `/adapters/number` | `NumberAdapter`, a fixed scientific backend |
-| `/adapters/bigint` | `BigIntAdapter`, integer arithmetic plus rational extraction |
+| `/adapters/bigint` | `BigIntAdapter`, integer arithmetic, exact sum comparison and truncation of complete rational sums |
 | `/adapters/decimal/core` | `DecimalCoreAdapter`, core operations plus rational extraction |
 | `/adapters/decimal/arithmetic` | `DecimalArithmeticAdapter`, arithmetic and all rational capabilities |
 | `/adapters/decimal/scientific`, `/adapters/decimal` | `DecimalScientificAdapter`, scientific arithmetic and all rational capabilities |

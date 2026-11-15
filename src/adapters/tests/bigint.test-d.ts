@@ -16,10 +16,8 @@ test('BigInt implements rational extraction with the native scalar type', () => 
 	numeric.toRationalTerm(1);
 	// @ts-expect-error Decimal text must first be converted with from.
 	numeric.toRationalTerm('1');
-	// @ts-expect-error Extraction does not imply rational construction.
-	numeric.fromRationalSum([]);
-	// @ts-expect-error Extraction does not imply rational comparison.
-	numeric.compareRationalSum([]);
+	expectTypeOf(numeric.fromRationalSum([])).toEqualTypeOf<bigint>();
+	expectTypeOf(numeric.compareRationalSum([])).toEqualTypeOf<-1 | 0 | 1>();
 });
 
 test('BigInt satisfies the arithmetic contract without scientific methods', () => {

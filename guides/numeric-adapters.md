@@ -135,6 +135,8 @@ These flags describe behavior: unsupported fractional and nonfinite inputs must 
 
 ## Optional rational capabilities
 
+BigInt extracts exact integers, compares rational sums before truncation, and truncates a complete rational sum toward zero. For example, two terms of one half produce `1n`. Direct `from` inputs must still be integral.
+
 Add these capabilities when you need to exchange exact represented values or combine rational terms before rounding. They are independent of the core, arithmetic and scientific tiers:
 
 | Capability | Method | Detect with |
@@ -143,7 +145,7 @@ Add these capabilities when you need to exchange exact represented values or com
 | `RationalConstruction<T>` | `fromRationalSum(terms)` | `hasRationalConstruction(adapter)` |
 | `RationalComparison` | `compareRationalSum(terms)` | `hasRationalComparison(adapter)` |
 
-Import the types and guards from `/adapters/contracts`. BigInt and Decimal core provide extraction; Decimal arithmetic and scientific provide all three. `RationalArithmeticAdapter<T>` combines arithmetic with all three capabilities, and `hasRationalArithmetic` checks for them together.
+Import the types and guards from `/adapters/contracts`. Decimal core provides extraction; Decimal arithmetic and scientific provide all three. `RationalArithmeticAdapter<T>` combines arithmetic with all three capabilities, and `hasRationalArithmetic` checks for them together.
 
 Extraction captures the value already represented by the backend. Construction rounds a complete rational sum once; comparison determines the unrounded sum's sign independently of backend precision and range. For usage, see [rational values](rational-values.md) and [fractions, roots and powers](fractions-and-powers.md).
 

@@ -110,20 +110,29 @@ function rationalSign<T>(adapter: ArithmeticAdapter<T>): number | undefined {
 check(rationalSign(numberAdapter) === undefined);
 const integerExtraction: RationalExtraction<bigint> = new BigIntAdapter();
 check(integerExtraction.toRationalTerm(-9007199254740993n).numerator === -9007199254740993n);
-const extractionOnly: ArithmeticAdapter<bigint> = integers;
-if (!hasRationalExtraction(extractionOnly)) throw new Error('Missing extraction capability');
-check(extractionOnly.toRationalTerm(9007199254740993n).numerator === 9007199254740993n);
-check(!hasRationalConstruction(extractionOnly) && !hasRationalComparison(extractionOnly) && !hasRationalArithmetic(extractionOnly));
-function constructIfSupported<T>(adapter: ArithmeticAdapter<T>): T | undefined {
+const integerArithmetic: ArithmeticAdapter<bigint> = integers;
+
+if (!hasRationalExtraction(integerArithmetic))
+{
+	throw new Error('Missing extraction capability');
+}
+
+check(integerArithmetic.toRationalTerm(9007199254740993n).numerator === 9007199254740993n);
+check(hasRationalArithmetic(integerArithmetic));
+function constructIfSupported<T>(adapter: ArithmeticAdapter<T>): T | undefined
+{
 	if (!hasRationalConstruction(adapter)) return undefined;
 	const construction: RationalConstruction<T> = adapter;
 	return construction.fromRationalSum([rationalTerm]);
 }
-function compareIfSupported<T>(adapter: ArithmeticAdapter<T>): -1 | 0 | 1 | undefined {
+
+function compareIfSupported<T>(adapter: ArithmeticAdapter<T>): -1 | 0 | 1 | undefined
+{
 	if (!hasRationalComparison(adapter)) return undefined;
 	const comparison: RationalComparison = adapter;
 	return comparison.compareRationalSum([rationalTerm]);
 }
+check(constructIfSupported(integerArithmetic) === 2n && compareIfSupported(integerArithmetic) === 1);
 check(constructIfSupported(numberAdapter) === undefined && compareIfSupported(numberAdapter) === undefined);
 
 // Compatibility entries retain function and error-class identity.
@@ -157,16 +166,23 @@ const validateFraction: (value: unknown) => RationalFraction = normalizeFraction
 const validatedFraction = validateFraction(uncheckedFraction);
 check(validatedFraction.numerator === -1n && validatedFraction.denominator === 3n && Object.isFrozen(validatedFraction));
 check(numeric.normalizeFraction === normalizeFraction);
-try {
+
+try
+{
 	parseFraction('1e-4097');
 	throw new Error('Expected an expansion failure');
-} catch (error: unknown) {
+}
+catch (error: unknown)
+{
 	check(error instanceof RationalRangeError && error instanceof RangeError && error.code === 'EXPANSION_LIMIT');
 }
-try {
+try
+{
 	parseRationalTerm('bad');
 	throw new Error('Expected a literal failure');
-} catch (error: unknown) {
+}
+catch (error: unknown)
+{
 	check(error instanceof RationalTypeError && error instanceof TypeError && error.code === 'INVALID_LITERAL');
 }
 check(addFractions(third, exactFraction(2n, 3n)).numerator === 1n);
@@ -191,15 +207,23 @@ check(rationalToScalar(numberAdapter, factoredValue(new Map([[2n, -3n]]), false,
 check(rationalToScalar(numberAdapter, rootedValue(new Map([[2n, 1n]]), 2n, sharedLimits), sharedLimits) === Math.sqrt(2));
 check(evaluateRational([{ exact: rationalTerm }], terms => terms[0]!.numerator, sharedLimits) === 25n);
 check(powRational(numberAdapter, 2, exactFraction(1n, 7n), sharedLimits) === Math.pow(2, 1 / 7));
-try {
+
+try
+{
 	parseFraction('1/3', { ...sharedLimits, maxPrecison: 8 } as RationalComputationOptions);
 	throw new Error('Expected a misspelled option to fail');
-} catch (error: unknown) {
+}
+catch (error: unknown)
+{
 	check(error instanceof RationalTypeError && error.code === 'INVALID_OPTIONS');
 }
-try {
+
+try
+{
 	powRational(numberAdapter, 2, exactFraction(1n, 7n), { maxPrecision: 2 });
 	throw new Error('Expected a precision failure');
-} catch (error: unknown) {
+}
+catch (error: unknown)
+{
 	check(error instanceof RationalRangeError && error.code === 'PRECISION_LIMIT');
 }

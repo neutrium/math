@@ -16,12 +16,12 @@ test('BigInt extraction preserves zero, signs and integers beyond Number precisi
 	}
 });
 
-test('BigInt advertises extraction independently of the other rational capabilities', () => {
+test('BigInt advertises exact rational sums and comparison', () => {
 	const numeric = new BigIntAdapter();
 	assert.equal(hasRationalExtraction(numeric), true);
-	assert.equal(hasRationalConstruction(numeric), false);
-	assert.equal(hasRationalComparison(numeric), false);
-	assert.equal(hasRationalArithmetic(numeric), false);
+	assert.equal(hasRationalConstruction(numeric), true);
+	assert.equal(hasRationalComparison(numeric), true);
+	assert.equal(hasRationalArithmetic(numeric), true);
 });
 
 test('cross-adapter conversion uses BigInt extraction without formatting or Number intermediates', () => {
@@ -105,4 +105,23 @@ test('BigInt representation and conversions', () => {
 	assert.equal('config' in n, false);
 	const { add, from } = n;
 	assert.equal(add(from('2'), 3n), 5n);
+});
+
+test('BigInt truncates after summing and compares before truncating, including sparse signed tails', () => {
+	const term = (numerator, denominator = 1n, exponent = 0n) => ({ numerator, denominator, exponent });
+	const gap = 1000000000000n;
+	for (const [terms, expected, sign] of [
+		[[], 0n, 0], [[term(1n, 2n), term(2n, 3n)], 1n, 1],
+		[[term(1n), term(-1n, 1n, -gap)], 0n, 1],
+		[[term(-2n), term(1n, 1n, -gap)], -1n, -1],
+		[[term(-3n, 2n), term(1n, 1n, -gap)], -1n, -1],
+		[[term(1n, 1n, gap), term(-10n, 1n, gap - 1n), term(-1n, 2n)], 0n, -1],
+		[[term(1n, 1n, -gap), term(-10n, 1n, -gap - 1n)], 0n, 0],
+	]) {
+		assert.equal(n.fromRationalSum(terms.values()), expected);
+		assert.equal(n.compareRationalSum(terms.values()), sign);
+	}
+	assert.equal(n.compareRationalSum([term(-1n, 3n, gap), term(1n)]), -1);
+	assert.throws(() => n.fromRationalSum([term(0n, 0n)]), RangeError);
+	assert.throws(() => n.compareRationalSum([term(1, 1n)]), TypeError);
 });
