@@ -227,3 +227,29 @@ catch (error: unknown)
 {
 	check(error instanceof RationalRangeError && error.code === 'PRECISION_LIMIT');
 }
+
+
+// A consumer-owned value domain does not need a numeric adapter or Decimal.
+import { createDomainExpressionFactory, type ExpressionDomain } from '@neutrium/math/expressions/core';
+type Box = Readonly<{ value: number }>;
+const boxedDomain: ExpressionDomain<Box> = {
+	literal: text => ({ value: Number(text) }),
+	from: value => typeof value === 'object' && value !== null ? value as Box : { value: Number(value) },
+	validate: value => {
+		if (!value || typeof value !== 'object' || !('value' in value) || !Number.isFinite(value.value)) throw new Error('Invalid box');
+		return value as Box;
+	},
+	unary: (operator, value) => ({ value: operator === '-' ? -value.value : value.value }),
+	binary: (operator, a, b) => {
+		switch (operator) {
+			case '+': return { value: a.value + b.value };
+			case '-': return { value: a.value - b.value };
+			case '*': return { value: a.value * b.value };
+			case '/': return { value: a.value / b.value };
+			case '%': return { value: a.value % b.value };
+			case '^': return { value: a.value ** b.value };
+		}
+	},
+};
+const boxedExpressions = createDomainExpressionFactory(boxedDomain);
+check(boxedExpressions.compile('2 * amount + 1').evaluate({ amount: { value: 3 } }).value === 7);

@@ -1,12 +1,13 @@
 import { ExpressionError } from './errors.js';
-import type { ExpressionLimits, ExpressionSpan } from './types.js';
+import type { ExpressionLimits, ExpressionSpan, ExpressionSyntax } from './types.js';
 
-export type ExpressionTokenKind = 'number' | 'identifier' | 'operator' | 'leftParen' | 'rightParen' | 'comma';
+export type ExpressionTokenKind = 'number' | 'identifier' | 'operator' | 'leftParen' | 'rightParen' | 'comma' | 'literal';
 /** Raw token spelling and its original location. Whitespace is skipped. */
 export interface ExpressionToken extends ExpressionSpan
 {
 	readonly kind: ExpressionTokenKind;
 	readonly text: string;
+	readonly literalType?: string;
 }
 
 /** @internal Unfinished numeric tokens are interpreted in parser context. */
@@ -14,6 +15,7 @@ export interface Token extends ExpressionSpan
 {
 	readonly kind: ExpressionTokenKind | 'incomplete';
 	readonly text: string;
+	readonly literalType?: string;
 }
 
 const digit = (code: number): boolean => code >= 48 && code <= 57;
@@ -24,8 +26,9 @@ export class Lexer
 {
 	private position = 0;
 	private count = 0;
+	private operandExpected = true;
 
-	constructor(readonly source: string, private readonly limits: Readonly<Required<ExpressionLimits>>)
+	constructor(readonly source: string, private readonly limits: Readonly<Required<ExpressionLimits>>, private readonly syntax: ExpressionSyntax = {})
 	{
 		if (typeof source !== 'string')
 		{
@@ -60,10 +63,34 @@ export class Lexer
 			throw new ExpressionError('LIMIT_EXCEEDED', 'Expression exceeds maxTokens', start, start + 1);
 		}
 
+		let extension: ReturnType<NonNullable<ExpressionSyntax['readLiteral']>>;
+
+		try
+		{
+			extension = this.syntax.readLiteral?.(text, start, this.operandExpected);
+		}
+		catch (cause)
+		{
+			throw new ExpressionError('INVALID_LITERAL', 'Literal recognition failed', start, start, cause);
+		}
+
+		if (extension !== undefined)
+		{
+			if (!extension || typeof extension !== 'object' || !Number.isSafeInteger(extension.end) || extension.end <= start || extension.end > text.length
+				|| typeof extension.type !== 'string' || !extension.type)
+			{
+				throw new ExpressionError('INVALID_LITERAL', 'Literal extension returned an invalid span or type', start, start);
+			}
+
+			this.position = extension.end;
+			this.operandExpected = false;
+			return { kind: 'literal', text: text.slice(start, extension.end), literalType: extension.type, start, end: extension.end };
+		}
+
 		let kind: Token['kind'];
 		const code = text.charCodeAt(start);
 
-		if (digit(code) || code === 46)
+		if (digit(code) || code === 46 && (!this.syntax.multiplicationSymbols?.includes('.') || digit(text.charCodeAt(start + 1))))
 		{
 			kind = 'number';
 
@@ -153,7 +180,7 @@ export class Lexer
 			{
 				kind = 'comma';
 			}
-			else if ('+-*/%^×÷−'.includes(char))
+			else if (('+-*/%^×÷−'.includes(char) || this.syntax.multiplicationSymbols?.includes(char)))
 			{
 				kind = 'operator';
 
@@ -167,6 +194,8 @@ export class Lexer
 				throw new ExpressionError('UNEXPECTED_CHARACTER', `Unexpected character ${JSON.stringify(char)}`, start, this.position);
 			}
 		}
+
+		this.operandExpected = kind === 'operator' || kind === 'leftParen' || kind === 'comma';
 
 		return {
 			kind,

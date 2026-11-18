@@ -9,7 +9,7 @@ export type UnaryOperator = '+' | '-';
 
 /** Immutable, backend-independent syntax. Numeric literals retain their original spelling. */
 export type ExpressionNode = ExpressionSpan & (
-	| { readonly kind: 'literal'; readonly text: string }
+	| { readonly kind: 'literal'; readonly text: string; readonly literalType?: string }
 	| { readonly kind: 'variable'; readonly name: string }
 	| { readonly kind: 'group'; readonly expression: ExpressionNode }
 	| { readonly kind: 'unary'; readonly operator: UnaryOperator; readonly operand: ExpressionNode; readonly operatorSpan: ExpressionSpan }
@@ -100,4 +100,47 @@ export interface ExpressionConstantMetadata
 	readonly origin: 'builtin' | 'custom';
 	/** The backend tier supports this constant. Custom constants are validated at registration. */
 	readonly available: boolean;
+}
+
+/** Trusted literal recognizer. Returned offsets refer to the original source. */
+export interface ExpressionSyntax
+{
+	readonly readLiteral?: (source: string, start: number, operandExpected: boolean) =>
+		{ readonly end: number; readonly type: string } | undefined;
+	/** Juxtaposed operands multiply at ordinary multiplication precedence. */
+	readonly implicitMultiplication?: boolean;
+	/** Additional single-character multiplication signs; they bind above * and /. */
+	readonly multiplicationSymbols?: readonly string[];
+}
+
+/** Value semantics for a mathematical language; no scalar-adapter contract is required. */
+export interface ExpressionDomain<T>
+{
+	/** Construct a numeric or extension literal; called once during compilation. */
+	literal(text: string, at: ExpressionSpan, literalType?: string): T;
+	/** Adopt constants and variable bindings into this domain/context. */
+	from(value: unknown): T;
+	/** Validate every constructed value and operation result, or throw. */
+	validate(value: unknown): T;
+	unary(operator: UnaryOperator, value: T): T;
+	binary(operator: BinaryOperator, left: T, right: T): T;
+	/** Optional exact path for a numeric exponent written literally in source. */
+	literalPower?(base: T, exponent: string): T;
+	/** Optional exact-literal recognizer, for example for rational exponents. Requires literalPower. */
+	exponentLiteral?(node: ExpressionNode): string | undefined;
+	readonly functions?: Readonly<Record<string, DomainExpressionFunction<T>>>;
+	readonly constants?: Readonly<Record<string, T>>;
+}
+
+/** A domain and optional literal syntax, with the usual functions, bindings and limits. */
+export interface DomainExpressionOptions<T> extends ExpressionOptions<T>
+{
+	readonly syntax?: ExpressionSyntax;
+}
+
+/** A domain function may share the domain's exact exponent path with the ^ operator. */
+export interface DomainExpressionFunction<T> extends ExpressionFunction<T>
+{
+	/** Requires exactly two arguments and a domain literalPower implementation. */
+	readonly literalPower?: boolean;
 }

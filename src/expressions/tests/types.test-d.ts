@@ -55,3 +55,20 @@ test('metadata is backend-independent and readonly through each evaluator entry 
 	// @ts-expect-error Constant metadata is readonly.
 	Expression.constants[0]!.name = 'other';
 });
+
+test('domain factories infer consumer-owned values and typed bindings', async () => {
+	const { createDomainExpressionFactory } = await import('@neutrium/math/expressions/core');
+	type Box = { value: number };
+	const domain: import('@neutrium/math/expressions/core').ExpressionDomain<Box> = {
+		literal: text => ({ value: Number(text) }),
+		from: value => ({ value: Number(value) }),
+		validate: value => value as Box,
+		unary: (_, value) => value,
+		binary: (_, left) => left,
+	};
+	const factory = createDomainExpressionFactory(domain);
+	expectTypeOf(factory.evaluate('2')).toEqualTypeOf<Box>();
+	expectTypeOf(factory.compile('x').evaluate({ x: { value: 2 } })).toEqualTypeOf<Box>();
+	// @ts-expect-error Boolean is not a domain value or numeric input.
+	factory.evaluate('x', { x: true });
+});

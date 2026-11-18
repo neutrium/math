@@ -1,13 +1,13 @@
 import { binaryParselet, createPrattParser, type PrefixParselet } from '@neutrium/utilities/parsing';
 import { ExpressionError, expressionSyntax } from './errors.js';
 import { Lexer, type Token } from './lexer.js';
-import type { BinaryOperator, ExpressionLimits, ExpressionNode, ExpressionSpan } from './types.js';
+import type { BinaryOperator, ExpressionLimits, ExpressionNode, ExpressionSpan, ExpressionSyntax } from './types.js';
 
 const span = (token: ExpressionSpan): ExpressionSpan => Object.freeze({ start: token.start, end: token.end });
 const operator = (text: string): BinaryOperator => text === '**' ? '^' : text === '×' ? '*' : text === '÷' ? '/' : text === '−' ? '-' : text as BinaryOperator;
 type Prefix = PrefixParselet<Token, ExpressionNode>;
 
-const literal: Prefix = (_, token) => Object.freeze({ kind: 'literal', text: token.text, start: token.start, end: token.end });
+const literal: Prefix = (_, token) => Object.freeze({ kind: 'literal', text: token.text, ...(token.literalType === undefined ? {} : { literalType: token.literalType }), start: token.start, end: token.end });
 
 const group: Prefix = (context, token) => {
 	const expression = context.parseExpression();
@@ -37,7 +37,7 @@ const product = binary(20, 'left');
 const power = binary(40, 'right');
 
 /** @internal Math grammar and AST construction over the shared Pratt engine. */
-export function createMathParser(limits: Readonly<Required<ExpressionLimits>>): (source: string) => ExpressionNode
+export function createMathParser(limits: Readonly<Required<ExpressionLimits>>, syntax: ExpressionSyntax = {}): (source: string) => ExpressionNode
 {
 	const identifier: Prefix = (context, token) => {
 		if (context.peek()?.kind !== 'leftParen')
@@ -81,11 +81,22 @@ export function createMathParser(limits: Readonly<Required<ExpressionLimits>>): 
 		});
 	};
 
+	const implicit = {
+		bindingPower: 20, consumeToken: false,
+		parse: (context: import('@neutrium/utilities/parsing').PrattContext<Token, ExpressionNode>, left: ExpressionNode, token: Token): ExpressionNode => {
+			const right = context.parseExpression(21);
+			return Object.freeze({ kind: 'binary', operator: '*', left, right,
+				operatorSpan: Object.freeze({ start: token.start, end: token.start }), start: left.start, end: right.end });
+		},
+	};
+	const extraProduct = binaryParselet<Token, ExpressionNode>(30, 'left', (left, token, right) =>
+		Object.freeze({ kind: 'binary', operator: '*', left, right, operatorSpan: span(token), start: left.start, end: right.end }));
+
 	const parser = createPrattParser<Token, ExpressionNode>({
 		prefix: token => {
 			switch (token.kind)
 			{
-				case 'number': return literal;
+				case 'number': case 'literal': return literal;
 				case 'identifier': return identifier;
 				case 'leftParen': return group;
 				case 'incomplete': return incomplete;
@@ -96,7 +107,12 @@ export function createMathParser(limits: Readonly<Required<ExpressionLimits>>): 
 		infix: token => {
 			if (token.kind !== 'operator')
 			{
-				return undefined;
+				return syntax.implicitMultiplication && ['number', 'literal', 'identifier', 'leftParen'].includes(token.kind) ? implicit : undefined;
+			}
+
+			if (syntax.multiplicationSymbols?.includes(token.text))
+			{
+				return extraProduct;
 			}
 
 			const op = operator(token.text);
@@ -108,5 +124,5 @@ export function createMathParser(limits: Readonly<Required<ExpressionLimits>>): 
 		maxTokens: limits.maxTokens
 	});
 
-	return source => expressionSyntax(() => parser.parse(new Lexer(source, limits), { end: source.length }));
+	return source => expressionSyntax(() => parser.parse(new Lexer(source, limits, syntax), { end: source.length }));
 }

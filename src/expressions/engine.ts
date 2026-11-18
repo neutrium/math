@@ -4,10 +4,11 @@ import type { ScientificAdapter } from '../adapters/contracts/ScientificAdapter.
 import { ExpressionError } from './errors.js';
 import { builtinFunctions, power, type Operation } from './functions.js';
 import { dataFields, expressionLimits } from './options.js';
+import { expressionSyntaxOptions } from './syntax-options.js';
 import { createMathParser } from './parser.js';
 import type {
 	CompiledExpression, ExpressionBindings, ExpressionFactory, ExpressionFunction, ExpressionNode,
-	ExpressionOptions, ExpressionResult, ExpressionSpan, ExpressionFunctionMetadata, ExpressionConstantMetadata,
+	ExpressionOptions, ExpressionResult, ExpressionDomain, DomainExpressionOptions, UnaryOperator, BinaryOperator, ExpressionSpan, ExpressionFunctionMetadata, ExpressionConstantMetadata,
 } from './types.js';
 
 type Instruction<T> = ExpressionSpan & (
@@ -18,6 +19,21 @@ type Instruction<T> = ExpressionSpan & (
 
 const identifier = /^[A-Za-z_][A-Za-z_0-9]*$/;
 const literal = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/;
+
+interface Runtime<T>
+{
+	functions: Map<string, Operation<T>>;
+	constants: Map<string, () => T>;
+	constantsAvailable: boolean;
+	parse(source: string): ExpressionNode;
+	convert(value: unknown, at: ExpressionSpan, binding?: boolean): T;
+	literal(node: Extract<ExpressionNode, { kind: 'literal' }>): T;
+	invoke(operation: Operation<T>, stack: readonly T[], start: number, count: number, at: ExpressionSpan, exponent?: string): T;
+	available(operation: Operation<T>): boolean;
+	exponentLiteral(node: ExpressionNode): string | undefined;
+	unary(operator: UnaryOperator): Operation<T>;
+	binary(operator: BinaryOperator): Operation<T>;
+}
 
 /** Recognise literal signs/groups without arithmetic folding or recursive traversal. */
 function literalExponent(node: ExpressionNode): string | undefined
@@ -42,7 +58,7 @@ function literalExponent(node: ExpressionNode): string | undefined
 		}
 		else
 		{
-			return node.kind === 'literal' ? (negative ? '-' : '') + node.text : undefined;
+			return node.kind === 'literal' && node.literalType === undefined ? (negative ? '-' : '') + node.text : undefined;
 		}
 	}
 }
@@ -80,7 +96,6 @@ export function createExpressionFactory<T>(numeric: ArithmeticAdapter<T>, option
 	const limits = expressionLimits(config.limits as ExpressionOptions<T>['limits']);
 	const parse = createMathParser(limits);
 	const functions = builtinFunctions(numeric, limits.maxArguments);
-	const builtinFunctionNames = new Set(functions.keys());
 	const constants = new Map<string, () => T>();
 	const scientific = numeric as ScientificAdapter<T>;
 
@@ -175,6 +190,134 @@ export function createExpressionFactory<T>(numeric: ArithmeticAdapter<T>, option
 			return calculate();
 		});
 	}
+	const names = { '+': 'add', '-': 'sub', '*': 'mul', '/': 'div', '%': 'rem', '^': 'pow' } as const;
+
+	return createConfiguredFactory({
+		functions, constants, constantsAvailable: numeric.tier === 'scientific',
+		parse, convert, invoke, exponentLiteral: literalExponent, literal: node => convert(node.text, node),
+		available: op => !op.scientific || numeric.tier === 'scientific',
+		unary: op => op === '-' ? functions.get('neg')! : { minArgs: 1, maxArgs: 1, invoke: (stack, start) => stack[start]! },
+		binary: op => functions.get(names[op])!,
+	}, config, limits);
+}
+
+/** Create an evaluator for consumer-owned values, operations and literal syntax. */
+export function createDomainExpressionFactory<T>(domain: ExpressionDomain<T>, options: DomainExpressionOptions<T> = {}): ExpressionFactory<T>
+{
+	const config = dataFields(options, ['limits', 'constants', 'functions', 'syntax']);
+	const limits = expressionLimits(config.limits as DomainExpressionOptions<T>['limits']);
+	const syntax = expressionSyntaxOptions(config.syntax as DomainExpressionOptions<T>['syntax']);
+
+	for (const key of ['literal', 'from', 'validate', 'unary', 'binary'] as const)
+	{
+		if (!domain || typeof domain[key] !== 'function')
+		{
+			throw new ExpressionError('INVALID_OPTIONS', `Domain requires ${key}`);
+		}
+	}
+
+	if (domain.literalPower !== undefined && typeof domain.literalPower !== 'function')
+	{
+		throw new ExpressionError('INVALID_OPTIONS', 'Domain literalPower must be a function');
+	}
+
+	if (domain.exponentLiteral !== undefined && (typeof domain.exponentLiteral !== 'function' || !domain.literalPower))
+	{
+		throw new ExpressionError('INVALID_OPTIONS', 'Domain exponentLiteral requires literalPower');
+	}
+
+	const recognizeExponent = domain.exponentLiteral?.bind(domain) ?? literalExponent;
+
+	function exponentLiteral(node: ExpressionNode): string | undefined
+	{
+		try
+		{
+			const result = recognizeExponent(node);
+			if (result !== undefined && typeof result !== 'string')
+			{
+				throw new TypeError('Expected exponent text');
+			}
+
+			return result;
+		}
+		catch (cause)
+		{
+			throw new ExpressionError('INVALID_EXPONENT', 'Domain exponent recognition failed', node.start, node.end, cause);
+		}
+	}
+	const literal = domain.literal.bind(domain), from = domain.from.bind(domain), validate = domain.validate.bind(domain);
+	const unary = domain.unary.bind(domain), binary = domain.binary.bind(domain), literalPower = domain.literalPower?.bind(domain);
+	const known = new Set(['INVALID_LITERAL', 'INVALID_EXPONENT', 'UNSUPPORTED_CAPABILITY', 'DIVISION_BY_ZERO', 'DOMAIN_ERROR', 'NON_FINITE_RESULT', 'NUMERIC_FAILURE']);
+
+	function checked(action: () => T, at: ExpressionSpan, binding = false): T
+	{
+		try
+		{
+			return validate(action());
+		}
+		catch (cause)
+		{
+			const code = binding ? 'INVALID_BINDING' : cause instanceof ExpressionError && known.has(cause.code) ? cause.code : 'NUMERIC_FAILURE';
+			throw new ExpressionError(code, cause instanceof Error ? cause.message : 'Domain operation failed', at.start, at.end, cause);
+		}
+	}
+
+	const functions = new Map<string, Operation<T>>();
+
+	for (const [name, definition] of Object.entries(dataFields(domain.functions ?? {})))
+	{
+		if (!identifier.test(name))
+		{
+			throw new ExpressionError('INVALID_OPTIONS', `Invalid function name ${name}`);
+		}
+
+		const fields = dataFields(definition, ['minArgs', 'maxArgs', 'evaluate', 'literalPower']);
+		const min = fields.minArgs, max = fields.maxArgs ?? min;
+
+		if (!isNonNegativeSafeInteger(min) || !isNonNegativeSafeInteger(max) || max < min || typeof fields.evaluate !== 'function')
+		{
+			throw new ExpressionError('INVALID_OPTIONS', `Invalid function definition for ${name}`);
+		}
+
+		if (fields.literalPower !== undefined && (typeof fields.literalPower !== 'boolean' || fields.literalPower && (!literalPower || min !== 2 || max !== 2)))
+		{
+			throw new ExpressionError('INVALID_OPTIONS', 'Exact-power functions require two arguments and domain literalPower');
+		}
+
+		const evaluate = fields.evaluate as ExpressionFunction<T>['evaluate'];
+		functions.set(name, { minArgs: min, maxArgs: Math.max(min, Math.min(max, limits.maxArguments)), ...(fields.literalPower ? { power: 'general' as const } : {}), invoke: (stack, start, count) => evaluate(Object.freeze(stack.slice(start, start + count))) });
+	}
+
+	const constants = new Map<string, () => T>();
+
+	for (const [name, value] of Object.entries(dataFields(domain.constants ?? {})))
+	{
+		if (!identifier.test(name) || functions.has(name))
+		{
+			throw new ExpressionError('INVALID_OPTIONS', `Invalid or reserved constant ${name}`);
+		}
+
+		const owned = checked(() => from(value), { start: 0, end: 0 });
+		constants.set(name, () => owned);
+	}
+
+	return createConfiguredFactory({
+		functions, constants, constantsAvailable: true, available: () => true, exponentLiteral,
+		parse: createMathParser(limits, syntax),
+		convert: (value, at, binding) => checked(() => from(value), at, binding),
+		literal: node => checked(() => literal(node.text, node, node.literalType), node),
+		invoke: (op, stack, start, count, at, exponent) => checked(() => exponent === undefined
+			? op.invoke(stack, start, count) : literalPower!(stack[start]!, exponent), at),
+		unary: op => ({ minArgs: 1, maxArgs: 1, invoke: (stack, start) => unary(op, stack[start]!) }),
+		binary: op => ({ minArgs: 2, maxArgs: 2, ...(op === '^' && literalPower ? { power: 'general' as const } : {}),
+			invoke: (stack, start) => binary(op, stack[start]!, stack[start + 1]!) }),
+	}, config, limits);
+}
+
+function createConfiguredFactory<T>(runtime: Runtime<T>, config: Record<string, unknown>, limits: Readonly<Required<import('./types.js').ExpressionLimits>>): ExpressionFactory<T>
+{
+	const { functions, constants, parse, convert, invoke } = runtime;
+	const builtinFunctionNames = new Set(functions.keys());
 	const builtinConstantNames = new Set(constants.keys());
 
 	function newName(name: string): void
@@ -232,15 +375,13 @@ export function createExpressionFactory<T>(numeric: ArithmeticAdapter<T>, option
 			throw new ExpressionError('INVALID_ARITY', `${name} expects ${found.minArgs === found.maxArgs ? found.minArgs : `${found.minArgs}–${found.maxArgs}`} arguments`, at.start, at.end);
 		}
 
-		if (found.scientific && numeric.tier !== 'scientific')
+		if (!runtime.available(found))
 		{
 			throw new ExpressionError('UNSUPPORTED_CAPABILITY', `${name} requires a scientific adapter`, at.start, at.end);
 		}
 
 		return found;
 	}
-
-	const operatorNames = { '+': 'add', '-': 'sub', '*': 'mul', '/': 'div', '%': 'rem', '^': 'pow' } as const;
 
 	function compile(source: string): CompiledExpression<T>
 	{
@@ -261,7 +402,7 @@ export function createExpressionFactory<T>(numeric: ArithmeticAdapter<T>, option
 
 			if (node.kind === 'literal')
 			{
-				instructions.push({ kind: 'value', value: convert(node.text, node), start: node.start, end: node.end });
+				instructions.push({ kind: 'value', value: runtime.literal(node), start: node.start, end: node.end });
 			}
 			else if (node.kind === 'variable')
 			{
@@ -290,10 +431,7 @@ export function createExpressionFactory<T>(numeric: ArithmeticAdapter<T>, option
 			}
 			else if (node.kind === 'unary')
 			{
-				if (node.operator === '-')
-				{
-					pending.push({ kind: 'call', operation: operation('neg', 1, node.operatorSpan), count: 1, ...node.operatorSpan });
-				}
+				pending.push({ kind: 'call', operation: runtime.unary(node.operator), count: 1, ...node.operatorSpan });
 
 				pending.push(node.operand);
 			}
@@ -301,8 +439,8 @@ export function createExpressionFactory<T>(numeric: ArithmeticAdapter<T>, option
 			{
 				const args = node.kind === 'binary' ? [node.left, node.right] : node.args;
 				const at = node.kind === 'binary' ? node.operatorSpan : node.nameSpan;
-				const fn = operation(node.kind === 'binary' ? operatorNames[node.operator] : node.name, args.length, at);
-				const exponent = fn.power ? literalExponent(args[1]!) : undefined;
+				const fn = node.kind === 'binary' ? runtime.binary(node.operator) : operation(node.name, args.length, at);
+				const exponent = fn.power ? runtime.exponentLiteral(args[1]!) : undefined;
 				pending.push({ kind: 'call', operation: fn, count: exponent === undefined ? args.length : 1, ...(exponent === undefined ? {} : { exponent }), ...at });
 
 				for (let i = exponent === undefined ? args.length - 1 : 0; i >= 0; i--)
@@ -400,12 +538,12 @@ export function createExpressionFactory<T>(numeric: ArithmeticAdapter<T>, option
 
 		return Object.freeze({ name, origin: builtinFunctionNames.has(name) ? 'builtin' : 'custom',
 			minArgs: operation.minArgs, maxArgs: operation.maxArgs,
-			available: (!operation.scientific || numeric.tier === 'scientific') && operation.minArgs <= limits.maxArguments });
+			available: runtime.available(operation) && operation.minArgs <= limits.maxArguments });
 	}));
 
 	const constantMetadata: readonly ExpressionConstantMetadata[] = Object.freeze([...constants.keys()].sort().map(name => {
 		const builtin = builtinConstantNames.has(name);
-		return Object.freeze({ name, origin: builtin ? 'builtin' : 'custom', available: !builtin || numeric.tier === 'scientific' });
+		return Object.freeze({ name, origin: builtin ? 'builtin' : 'custom', available: !builtin || runtime.constantsAvailable });
 	}));
 
 	return Object.freeze({

@@ -7,7 +7,7 @@ export { ExpressionError } from './errors.js';
 export type { ExpressionErrorCode } from './errors.js';
 export { DEFAULT_EXPRESSION_LIMITS } from './options.js';
 export type { ExpressionToken, ExpressionTokenKind } from './lexer.js';
-export type { ExpressionLimits, ExpressionNode, ExpressionSpan, BinaryOperator, UnaryOperator } from './types.js';
+export type { ExpressionLimits, ExpressionNode, ExpressionSpan, BinaryOperator, UnaryOperator, ExpressionSyntax } from './types.js';
 
 // Share only the immutable default grammar. Each invocation creates its own lexer,
 // cursor, depth counter and AST. Initialize lazily so tokenizing alone does not set it up.

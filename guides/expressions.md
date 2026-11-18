@@ -209,3 +209,49 @@ Standalone parsing without explicit limits reuses a lazily initialized default g
 Run `npm test` for syntax, numeric, generated-expression, type and installed-package checks. The package tests also check that Number/syntax imports exclude Decimal and curve algorithms. Generated syntax regressions use three fixed seeds and include explicit precedence/associativity trees, operator aliases, compact and whitespace-rich input, literal spelling, token offsets, malformed edits, and resource-limit boundaries. They check Number and Decimal evaluation and recovery after failed parses. Failure messages include the seed and source; run a seed in isolation after building with `npx vitest run src/expressions/tests/generated-syntax.test.mjs -t 0x4e455554`. Expected trees and arithmetic results are supplied independently of the parser; the tests do not use `eval` or generated JavaScript.
 
 Run `npm run benchmark -- expressions` to measure parse-only, compile-and-evaluate and retained-expression evaluation separately.
+
+## Consumer-defined value domains and syntax
+
+`createDomainExpressionFactory` from `/expressions/core` reuses the compiler, variable bindings, iterative execution, metadata and errors with values that are not numeric scalars. An `ExpressionDomain<T>` supplies `literal`, `from`, `validate`, `unary` and `binary`. `literal` receives the original text, source span and optional extension type; `from` adopts constants and bindings; `validate` checks every value and operation result. Domain values should be immutable, and captured domain behavior must remain stable for the lifetime of compiled expressions.
+
+```ts
+import { createDomainExpressionFactory, type ExpressionDomain } from '@neutrium/math/expressions/core';
+
+type Box = Readonly<{ value: number }>;
+const box = (value: number): Box => Object.freeze({ value });
+
+const domain: ExpressionDomain<Box> = {
+    literal: text => box(Number(text)),
+    from: value => box(typeof value === 'object' && value !== null && 'value' in value
+        ? Number(value.value) : Number(value)),
+    validate: value => {
+        if (!value || typeof value !== 'object' || !('value' in value)
+            || typeof value.value !== 'number' || !Number.isFinite(value.value)) throw new Error('Expected a finite Box');
+        return value as Box;
+    },
+    unary: (op, a) => box(op === '-' ? -a.value : a.value),
+    binary: (op, a, b) => {
+        switch (op) {
+            case '+': return box(a.value + b.value);
+            case '-': return box(a.value - b.value);
+            case '*': return box(a.value * b.value);
+            case '/': return box(a.value / b.value);
+            case '%': return box(a.value % b.value);
+            case '^': return box(a.value ** b.value);
+        }
+    },
+};
+
+const expressions = createDomainExpressionFactory(domain);
+expressions.compile('x * 2 + 1').evaluate({ x: box(3) }); // { value: 7 }
+```
+
+Domain functions and constants are optional registries. They appear as built-ins and cannot be replaced by options. No scalar functions or constants are implicitly installed. The regular `functions`, `constants` and `limits` options remain available. Domain callback failures become errors at the literal, variable, operator or call that triggered them; they cannot produce an incomplete-input result. Throw `ExpressionError('DOMAIN_ERROR', ...)` for invalid operands, or other applicable numeric error codes. Binding failures are classified as `INVALID_BINDING`.
+
+The optional `syntax` configuration accepts a trusted `readLiteral(source, start, operandExpected)` callback. Return `{ end, type }` to consume an extension literal, or `undefined` to use the normal lexer. Spans must make progress and stay within the original input. Source spelling is retained in the AST; the domain receives the `type` at compilation. Token limits count each extension literal as one token; the length limit still bounds the entire source. Consumers must bound any additional work their callbacks perform. Source callbacks run before ordinary tokenization, so consumers own keyword/unit/variable ambiguity rules.
+
+`implicitMultiplication: true` permits juxtaposed operands at ordinary multiplication precedence. `multiplicationSymbols` adds single-character product signs at precedence between ordinary multiplication and powers. Standard operators and delimiters cannot be redefined. The scalar `createExpressionFactory` API keeps its existing strict syntax.
+
+A domain may implement `literalPower(base, text)` to preserve written exponent precision. Its optional `exponentLiteral(node)` recognizer can extend the default signed/grouped numeric-literal recognition to exact fractions or another domain-specific form. A domain function with exactly two arguments may set `literalPower: true` to share this path. Without an exact literal, the exponent evaluates normally through the domain. Extension literals never take the default numeric-literal shortcut.
+
+This layer has no Quantity dependency. Quantity owns its unit recognition and dimensional arithmetic and supplies those through these extension points.

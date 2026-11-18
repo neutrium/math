@@ -1,6 +1,6 @@
 {
 	"name": "@neutrium/math",
-	"version": "2.1.0",
+	"version": "2.2.0",
 	"description": "Expressions, curves, numeric contracts, exact-value helpers and arithmetic backends for Neutrium applications",
 	"type": "module",
 	"sideEffects": false,
